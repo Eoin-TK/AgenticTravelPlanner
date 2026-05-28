@@ -41,7 +41,7 @@ class HolidayInfo(BaseModel):
     destination: str
     month: str
 
-def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate: str, currency: str ="EUR", market: str = "IRL"):
+def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate: str, currency: str ="EUR"):
     """
     Retrieve flight prices from skyscanner (via rapidAPI)
 
@@ -58,8 +58,8 @@ def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate:
         "returnFromDate":returnFromDate,
         "currency":currency,
         "fromDate":fromDate,
-        "destinationSkyId":destinationID,
-        "market":market}
+        "destinationSkyId":destinationID
+    }
     
     headers = {
         "x-rapidapi-key": os.getenv("SKYSCANNER_RAPIDAPI_KEY"),
@@ -71,9 +71,6 @@ def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate:
 
     inboundFlights_df = pd.DataFrame(response.json()["outboundDates"])
     outboundFlights_df = pd.DataFrame(response.json()["inboundDates"])
-
-    inboundFlights_df.to_csv('inbound.csv', index=False)
-    outboundFlights_df.to_csv('outbound.csv', index=False)
 
     return outboundFlights_df, inboundFlights_df
 
