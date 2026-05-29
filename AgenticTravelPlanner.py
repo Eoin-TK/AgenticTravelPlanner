@@ -1,4 +1,4 @@
-#IMPORT LIBRARIES
+# IMPORT LIBRARIES
 # utilities
 import os
 from dotenv import load_dotenv
@@ -33,34 +33,70 @@ class HolidayInfo(BaseModel):
         travellers List[Traveller]: A list of travellers
         origin (str): the origin location
         destination (str): the destination location
-        duration (int): number of nights
-        month (str): the month of travel
+        departureDate (str): departure date, YYYY-MM-DD
+        returnDate (str): return date, YYYY-MM-DD
     """
     travellers: List[Traveller]
     origin: str
     destination: str
-    month: str
+    departureDate: str
+    returnDate: str
 
-def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate: str, currency: str ="EUR"):
+def skyscannerApiUrl(endpoint: str):
+    return f"https://skyscanner-flights-travel-api.p.rapidapi.com/flights/{endpoint}"
+
+def getAirport(location: str):
     """
-    Retrieve flight prices from skyscanner (via rapidAPI)
+    Retrieve airport details for a given location.
 
     Attributes:
-        originID (str): ID of origin airport
-        destinationID (str): ID of destination airport
-        fromDate (str): earliest option for date of outbound flight, YYYY-MM-DD
-        returnFromDate (str): earliest option for date of return flight, YYYY-MM-DD
-        currency (str): currency to retrieve prices in
+        location (str): the location for which to find airport details
     """
-    url = os.getenv("SKYSCANNER_RAPIDAPI_URL")
+    url = skyscannerApiUrl("searchAirport")
     querystring = {
-        "originSkyId":originID,
-        "returnFromDate":returnFromDate,
-        "currency":currency,
-        "fromDate":fromDate,
-        "destinationSkyId":destinationID
+        "market":"GB",
+        "query":location,
+        "locale":"en-GB"
     }
-    
+
+    headers = {
+        "x-rapidapi-key": os.getenv("SKYSCANNER_RAPIDAPI_KEY"),
+        "x-rapidapi-host": os.getenv("SKYSCANNER_RAPIDAPI_HOST"),
+        "Content-Type": "application/json"
+    }
+
+    response = requests.get(url, headers=headers, params=querystring)
+    return response.json()["places"][0]  
+
+def getFlights(myTrip: HolidayInfo, currency: str ="EUR"):
+    """
+    Retrieve flight itineraries from skyscanner (via rapidAPI)
+
+    Attributes:
+        myTrip (HolidayInfo): trip details, see HolidayInfo definition
+        currency (str): currency to use for prices, default 'EUR'
+    """
+    # Get airport details
+    originAirport = getAirport(myTrip.origin)
+    destinationAirport = getAirport(myTrip.destination)
+
+    url = skyscannerApiUrl("searchFlights")
+
+    querystring = {
+        "childrens":str(len([t for t in myTrip.travellers if t.age < 18])),
+        "adults":str(len([t for t in myTrip.travellers if t.age >= 18])),
+        "originSkyId":originAirport["skyId"],
+        "destinationSkyId":destinationAirport["skyId"],
+        "destinationEntityId":destinationAirport["entityId"],
+        "returnDate":myTrip.returnDate,
+        "originEntityId":originAirport["entityId"],
+        "date":myTrip.departureDate,
+        "cabinClass":"economy",
+        "infants":"0",
+        "market":"DE",
+        "currency":"EUR"
+    }
+
     headers = {
         "x-rapidapi-key": os.getenv("SKYSCANNER_RAPIDAPI_KEY"),
         "x-rapidapi-host": os.getenv("SKYSCANNER_RAPIDAPI_HOST"),
@@ -69,8 +105,24 @@ def getFlights(originID: str, destinationID: str, fromDate: str, returnFromDate:
 
     response = requests.get(url, headers=headers, params=querystring)
 
-    inboundFlights_df = pd.DataFrame(response.json()["outboundDates"])
-    outboundFlights_df = pd.DataFrame(response.json()["inboundDates"])
+    flights_df = pd.DataFrame(response.json()["itineraries"])
 
-    return outboundFlights_df, inboundFlights_df
+    return flights_df
 
+if __name__ == "__main__":
+    myTraveller = Traveller(
+        name="demo",
+        age=30,
+        interests=["History", "Hiking", "Fine Dining"]
+    )
+    myTrip = HolidayInfo(
+        travellers=[myTraveller],
+        origin="Cork",
+        destination="Rhodes",
+        departureDate="2026-07-20",
+        returnDate="2026-07-27"
+    )
+
+    test_df = getFlights(myTrip=myTrip)
+    
+    print(test_df)
